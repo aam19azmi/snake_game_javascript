@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake Game - AzmiDev</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --accent-color: #00d2d3;
+            --snake-color: #00d2d3;
+            --food-color: #ff4757;
+            --text-color: #e2e8f0;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Poppins', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden; /* Mencegah scroll saat main */
+            touch-action: none; /* Mencegah zoom/scroll di HP */
+        }
+
+        h1 { margin-bottom: 10px; color: var(--accent-color); text-shadow: 0 0 10px rgba(0, 210, 211, 0.3); }
+        
+        #score-board {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px 20px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        #game-container {
+            position: relative;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        canvas {
+            background-color: #1e293b;
+            display: block;
+            border-radius: 10px;
+        }
+
+        /* Overlay untuk Start/Game Over */
+        #overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(5px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            z-index: 10;
+        }
+
+        .btn {
+            background: var(--accent-color);
+            color: #0f172a;
+            border: none;
+            padding: 12px 30px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: 0.3s;
+            margin-top: 20px;
+            text-decoration: none;
+        }
+
+        .btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(0, 210, 211, 0.6);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 2px solid var(--accent-color);
+            color: var(--accent-color);
+            margin-top: 10px;
+        }
+        
+        .btn-outline:hover { background: var(--accent-color); color: #0f172a; }
+
+        /* Kontrol HP (D-Pad) */
+        .controls {
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: repeat(3, 60px);
+            grid-template-rows: repeat(2, 60px);
+            gap: 10px;
+            display: none; /* Hidden di desktop */
+        }
+
+        .ctrl-btn {
+            width: 60px; height: 60px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            color: white;
+            font-size: 1.5rem;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            user-select: none;
+        }
+        .ctrl-btn:active { background: var(--accent-color); color: black; }
+        
+        .up { grid-column: 2; grid-row: 1; }
+        .left { grid-column: 1; grid-row: 2; }
+        .down { grid-column: 2; grid-row: 2; }
+        .right { grid-column: 3; grid-row: 2; }
+
+        /* Tampilkan kontrol hanya di layar kecil */
+        @media (max-width: 768px) {
+            .controls { display: grid; }
+            canvas { width: 340px; height: 340px; } /* Resize canvas di HP */
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Classic Snake</h1>
+    <div id="score-board">Score: <span id="score">0</span></div>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+        
+        <div id="overlay">
+            <h2 id="status-text" style="font-size: 2rem; margin-bottom: 10px;">Ready?</h2>
+            <p style="color: #94a3b8; margin-bottom: 10px;">Gunakan Panah Keyboard / Tombol</p>
+            <button class="btn" onclick="startGame()">Mulai Main</button>
+            <a href="https://sourcecodejournal.dev" rel="noopener noreferrer" class="btn btn-outline">Kembali ke Portfolio</a>
+        </div>
+    </div>
+
+    <div class="controls">
+        <div class="ctrl-btn up" onclick="changeDirection('UP')"><i class="arrow">⬆️</i></div>
+        <div class="ctrl-btn left" onclick="changeDirection('LEFT')"><i class="arrow">⬅️</i></div>
+        <div class="ctrl-btn down" onclick="changeDirection('DOWN')"><i class="arrow">⬇️</i></div>
+        <div class="ctrl-btn right" onclick="changeDirection('RIGHT')"><i class="arrow">➡️</i></div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const scoreElement = document.getElementById("score");
+        const overlay = document.getElementById("overlay");
+        const statusText = document.getElementById("status-text");
+
+        // Game Settings
+        const box = 20; // Ukuran 1 kotak grid
+        let score = 0;
+        let gameLoop;
+        
+        // Initial State
+        let snake = [];
+        let food = {};
+        let d = ""; // Direction
+
+        // Event Listener untuk Keyboard
+        document.addEventListener("keydown", direction);
+
+        function direction(event) {
+            let key = event.keyCode;
+            if (key == 37 && d != "RIGHT") d = "LEFT";
+            else if (key == 38 && d != "DOWN") d = "UP";
+            else if (key == 39 && d != "LEFT") d = "RIGHT";
+            else if (key == 40 && d != "UP") d = "DOWN";
+        }
+
+        // Fungsi kontrol tombol layar (HP)
+        function changeDirection(dir) {
+            if (dir == "LEFT" && d != "RIGHT") d = "LEFT";
+            else if (dir == "UP" && d != "DOWN") d = "UP";
+            else if (dir == "RIGHT" && d != "LEFT") d = "RIGHT";
+            else if (dir == "DOWN" && d != "UP") d = "DOWN";
+        }
+
+        function drawGame() {
+            // Background Canvas
+            ctx.fillStyle = "#1e293b";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Snake
+            for (let i = 0; i < snake.length; i++) {
+                ctx.fillStyle = (i == 0) ? "#00d2d3" : "#00a8a9"; // Kepala beda warna
+                ctx.fillRect(snake[i].x, snake[i].y, box, box);
+                
+                ctx.strokeStyle = "#0f172a"; // Garis pinggir kotak ular
+                ctx.strokeRect(snake[i].x, snake[i].y, box, box);
+            }
+
+            // Draw Food
+            ctx.fillStyle = "#ff4757";
+            ctx.beginPath();
+            ctx.arc(food.x + box/2, food.y + box/2, box/2.5, 0, 2*Math.PI);
+            ctx.fill();
+
+            // Posisi Kepala Lama
+            let snakeX = snake[0].x;
+            let snakeY = snake[0].y;
+
+            // Gerakan
+            if (d == "LEFT") snakeX -= box;
+            if (d == "UP") snakeY -= box;
+            if (d == "RIGHT") snakeX += box;
+            if (d == "DOWN") snakeY += box;
+
+            // Cek Makan
+            if (snakeX == food.x && snakeY == food.y) {
+                score++;
+                scoreElement.innerHTML = score;
+                generateFood();
+            } else {
+                // Hapus ekor jika tidak makan
+                snake.pop();
+            }
+
+            // Game Over Rules
+            let newHead = { x: snakeX, y: snakeY };
+
+            if (snakeX < 0 || snakeX >= canvas.width || 
+                snakeY < 0 || snakeY >= canvas.height || 
+                collision(newHead, snake)) {
+                
+                clearInterval(gameLoop);
+                statusText.innerText = "Game Over!";
+                overlay.style.display = "flex"; // Tampilkan menu lagi
+                return;
+            }
+
+            snake.unshift(newHead);
+        }
+
+        function generateFood() {
+            food = {
+                x: Math.floor(Math.random() * (canvas.width / box)) * box,
+                y: Math.floor(Math.random() * (canvas.height / box)) * box
+            };
+            // Pastikan makanan tidak muncul di badan ular
+            for(let i=0; i<snake.length; i++){
+                if(food.x == snake[i].x && food.y == snake[i].y){
+                    generateFood();
+                }
+            }
+        }
+
+        function collision(head, array) {
+            for (let i = 0; i < array.length; i++) {
+                if (head.x == array[i].x && head.y == array[i].y) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function startGame() {
+            // Reset Variable
+            snake = [];
+            snake[0] = { x: 9 * box, y: 10 * box }; // Posisi awal tengah
+            score = 0;
+            d = ""; // Diam dulu sampai ditekan
+            scoreElement.innerHTML = score;
+            generateFood();
+            
+            // Sembunyikan Overlay
+            overlay.style.display = "none";
+
+            // Jalankan Loop (Kecepatan 100ms)
+            if(gameLoop) clearInterval(gameLoop);
+            gameLoop = setInterval(drawGame, 100);
+        }
+    </script>
+</body>
+</html>
